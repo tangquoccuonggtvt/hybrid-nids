@@ -1,6 +1,6 @@
 # Hybrid-NIDS: Suricata + Random Forest Network Intrusion Detection
 
-> Hệ thống phát hiện xâm nhập mạng lai (Hybrid Network Intrusion Detection System) kết hợp phát hiện dựa trên luật/chữ ký (Suricata) và phát hiện dựa trên học máy theo đặc trưng luồng mạng (Random Forest).
+> A hybrid Network Intrusion Detection System (Hybrid-NIDS) combining signature-based detection (Suricata) with flow-based machine learning detection (Random Forest).
 
 [![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue)]()
 [![scikit--learn](https://img.shields.io/badge/scikit--learn-1.6.1-orange)]()
@@ -8,42 +8,42 @@
 
 ---
 
-## Giới thiệu
+## Introduction
 
-**Hybrid-NIDS** là mã nguồn phục vụ đề án thạc sĩ ứng dụng về hệ thống phát hiện xâm nhập mạng lai, kết hợp hai nhánh phát hiện **độc lập**:
+**Hybrid-NIDS** is the source code supporting an applied master's thesis project on a hybrid network intrusion detection system, combining two **independent** detection branches:
 
-- **Suricata** — phát hiện dựa trên luật/chữ ký (signature-based).
-- **Random Forest** — phát hiện dựa trên đặc trưng luồng mạng, tiếp cận flow-based machine learning.
+- **Suricata** — signature/rule-based detection.
+- **Random Forest** — detection based on network flow features (flow-based machine learning).
 
-Cảnh báo từ hai nhánh được **dung hợp (fusion)** theo cửa sổ thời gian và đưa vào **ELK Stack/Kibana** để giám sát, phân tích và trình diễn trong môi trường lab.
+Alerts from the two branches are **fused (correlated)** within a time window and forwarded to the **ELK Stack/Kibana** for monitoring, analysis, and demonstration in a lab environment.
 
-> **Lưu ý:** Repo này đã được làm sạch để công khai trên GitHub. Môi trường ảo, dữ liệu UNSW-NB15 dung lượng lớn, PCAP thực tế, log vận hành và các file chứa bí mật triển khai **không** được đưa vào repo.
-
----
-
-## Mục lục
-
-- [Kiến trúc tổng quát](#kiến-trúc-tổng-quát)
-- [Điểm chính của codebase](#điểm-chính-của-codebase)
-- [Kết quả mô hình chính thức](#kết-quả-mô-hình-chính-thức)
-- [Cấu trúc repo](#cấu-trúc-repo)
-- [Yêu cầu môi trường](#yêu-cầu-môi-trường)
-- [Cài đặt nhanh](#cài-đặt-nhanh)
-- [Kiểm tra repo sau khi cài đặt](#kiểm-tra-repo-sau-khi-cài-đặt)
-- [Chạy AI inference bằng dữ liệu mẫu](#chạy-ai-inference-bằng-dữ-liệu-mẫu)
-- [Chạy dashboard thời gian thực](#chạy-dashboard-thời-gian-thực)
-- [Dung hợp cảnh báo Suricata + AI](#dung-hợp-cảnh-báo-suricata--ai)
-- [Dataset và tái tạo kết quả](#dataset-và-tái-tạo-kết-quả)
-- [PCAP / live traffic](#pcap--live-traffic)
-- [Triển khai Ubuntu + ELK](#triển-khai-ubuntu--elk)
-- [Bảo mật secret](#bảo-mật-secret)
-- [Tài liệu quan trọng](#tài-liệu-quan-trọng)
-- [Phạm vi sử dụng](#phạm-vi-sử-dụng)
-- [Ghi chú về license](#ghi-chú-về-license)
+> **Note:** This repository has been cleaned for public release on GitHub. The virtual environment, the large UNSW-NB15 dataset, real PCAP captures, operational logs, and any files containing deployment secrets are **not** included in the repo.
 
 ---
 
-## Kiến trúc tổng quát
+## Table of Contents
+
+- [Overall Architecture](#overall-architecture)
+- [Key Features of the Codebase](#key-features-of-the-codebase)
+- [Official Model Results](#official-model-results)
+- [Repository Structure](#repository-structure)
+- [Environment Requirements](#environment-requirements)
+- [Quick Installation](#quick-installation)
+- [Post-Installation Checks](#post-installation-checks)
+- [Running AI Inference on Sample Data](#running-ai-inference-on-sample-data)
+- [Running the Real-Time Dashboard](#running-the-real-time-dashboard)
+- [Suricata + AI Alert Fusion](#suricata--ai-alert-fusion)
+- [Dataset and Reproducing Results](#dataset-and-reproducing-results)
+- [PCAP / Live Traffic](#pcap--live-traffic)
+- [Ubuntu + ELK Deployment](#ubuntu--elk-deployment)
+- [Secrets Security](#secrets-security)
+- [Key Documentation](#key-documentation)
+- [Intended Use](#intended-use)
+- [License Note](#license-note)
+
+---
+
+## Overall Architecture
 
 ```mermaid
 flowchart LR
@@ -60,29 +60,29 @@ flowchart LR
     H --> K[Realtime Dashboard]
 ```
 
-Ở tầng thu thập, cùng một nguồn traffic được quan sát từ cổng SPAN/mirror. Ở tầng phát hiện, Suricata và Random Forest hoạt động theo hai cơ chế độc lập. Module `hybrid_alert_fusion.py` thực hiện **tương quan cảnh báo (correlation)** thay vì biến hai nhánh thành một bộ phân loại duy nhất.
+At the collection layer, the same traffic source is observed via a SPAN/mirror port. At the detection layer, Suricata and Random Forest operate as two independent mechanisms. The `hybrid_alert_fusion.py` module performs **alert correlation**, rather than merging the two branches into a single classifier.
 
 ---
 
-## Điểm chính của codebase
+## Key Features of the Codebase
 
-- Random Forest với pipeline tiền xử lý cho dữ liệu số và dữ liệu phân loại.
-- Schema chính thức gồm **41 đặc trưng**, trong đó có 35 đặc trưng số và 6 đặc trưng phân loại.
-- Chia **Development / Hold-out** theo feature hash nhằm hạn chế trùng lặp giữa các tập.
-- **Group-aware Stratified 5-Fold Cross Validation** để chọn ngưỡng phân loại.
-- Kiểm tra leakage, benchmark suy luận, feature importance và confusion matrix.
-- Dung hợp cảnh báo Suricata + AI thành `HYBRID_CORRELATED_ALERT`, `AI_ONLY_ALERT`, `SURICATA_ONLY_ALERT`.
-- Dashboard replay theo thời gian thực để phục vụ demo.
-- Script triển khai Ubuntu, systemd, Logstash, ILM, logrotate và kiểm tra đồng bộ thời gian.
-- Kiểm tra SHA-256 trước khi load model pickle/joblib từ vùng artifact tin cậy.
+- Random Forest with a preprocessing pipeline for both numerical and categorical data.
+- Official schema of **41 features**, comprising 35 numerical features and 6 categorical features.
+- **Development/Hold-out** split by feature hash to limit overlap between sets.
+- **Group-aware Stratified 5-Fold Cross Validation** for classification threshold selection.
+- Leakage checks, inference benchmarking, feature importance analysis, and confusion matrix reporting.
+- Fusion of Suricata + AI alerts into `HYBRID_CORRELATED_ALERT`, `AI_ONLY_ALERT`, and `SURICATA_ONLY_ALERT`.
+- Real-time replay dashboard for demonstrations.
+- Ubuntu deployment scripts covering systemd, Logstash, ILM, logrotate, and time synchronization checks.
+- SHA-256 integrity verification before loading pickle/joblib models from a trusted artifact directory.
 
 ---
 
-## Kết quả mô hình chính thức
+## Official Model Results
 
-> Các giá trị dưới đây được lấy từ `models/metrics.json` trong repo này.
+> The values below are taken from `models/metrics.json` in this repository.
 
-| Chỉ số | Kết quả |
+| Metric | Result |
 |---|---|
 | Accuracy | 0.992768 |
 | Balanced Accuracy | 0.984698 |
@@ -102,24 +102,24 @@ flowchart LR
 | **Actual Negative** | TN = 442,060 | FP = 2,005 |
 | **Actual Positive** | FN = 1,669 | TP = 62,305 |
 
-Kết quả kiểm tra leakage hiện lưu trong `models/leakage_check.json`: `duplicate_hash_count = 0` và `is_pass = true`.
+Leakage check results are stored in `models/leakage_check.json`: `duplicate_hash_count = 0` and `is_pass = true`.
 
 ---
 
-## Cấu trúc repo
+## Repository Structure
 
 ```text
 HYBRID-NIDS/
 ├── README.md
 ├── requirements.txt
 ├── requirements-optional.txt
-├── train_model.py                 # Huấn luyện mô hình chính thức
-├── nids_detector.py               # Suy luận AI trên flow CSV / tích hợp PCAP
-├── nids_features.py               # Trích xuất đặc trưng luồng
-├── hybrid_alert_fusion.py         # Dung hợp Suricata + AI
-├── realtime_dashboard.py          # Dashboard replay thời gian thực
-├── hybrid_nids_webpanel.py        # Web control panel cho lab
-├── verify_official_artifacts.py   # Kiểm tra bộ artifact đầy đủ
+├── train_model.py                 # Official model training
+├── nids_detector.py               # AI inference on flow CSV / PCAP integration
+├── nids_features.py               # Flow feature extraction
+├── hybrid_alert_fusion.py         # Suricata + AI alert fusion
+├── realtime_dashboard.py          # Real-time replay dashboard
+├── hybrid_nids_webpanel.py        # Web control panel for the lab
+├── verify_official_artifacts.py   # Full artifact set verification
 ├── verify_model_artifacts_security.py
 ├── benchmark_inference.py
 ├── analyze_schema_gap.py
@@ -127,47 +127,47 @@ HYBRID-NIDS/
 ├── analyze_ttl_features.py
 ├── evaluate_artifacts.py
 ├── evaluate_local_traffic.py
-├── sample_flows.csv               # Mẫu nhỏ để test inference
+├── sample_flows.csv               # Small sample for quick inference testing
 ├── models/                        # Model + metrics + schema + figures
-├── data/                          # Chỉ giữ dữ liệu mẫu/metadata nhỏ
-├── logs/                          # Chỉ giữ log mẫu phục vụ fusion
-├── docs/                          # Tài liệu kỹ thuật và hướng dẫn tái tạo
+├── data/                          # Small sample/metadata only
+├── logs/                          # Sample logs for fusion testing only
+├── docs/                          # Technical documentation and reproduction guides
 ├── deployment/                    # systemd, ELK, logrotate, env.example
-├── scripts/                       # Script chạy lab/deployment
-├── labeling/                      # Mẫu gán nhãn theo attack window
-├── evidence_screenshots/          # Bằng chứng kiểm thử/thực nghiệm
-└── tools/                         # Tiện ích tạo tài liệu/phụ trợ luận văn
+├── scripts/                       # Lab/deployment scripts
+├── labeling/                      # Attack-window labeling samples
+├── evidence_screenshots/          # Testing/experiment evidence
+└── tools/                         # Documentation/thesis support utilities
 ```
 
-Danh sách file/artifact được khóa cho luận văn nằm trong `OFFICIAL_ARTIFACTS.md` và `docs/CODEBASE_LOCK.md`.
+The list of artifacts locked for the thesis is maintained in `OFFICIAL_ARTIFACTS.md` and `docs/CODEBASE_LOCK.md`.
 
 ---
 
-## Yêu cầu môi trường
+## Environment Requirements
 
 ### Python
 
-Khuyến nghị dùng **Python 3.12** hoặc **3.13**. Artifact model hiện tại được tạo với:
+**Python 3.12 or 3.13** is recommended. The current model artifact was built with:
 
-| Thành phần | Phiên bản |
+| Component | Version |
 |---|---|
 | Python | 3.13.9 |
 | scikit-learn | 1.6.1 |
 | pandas | 2.3.3 |
 | NumPy | 2.3.5 |
 
-> `scikit-learn` được **pin** ở phiên bản `1.6.1` trong `requirements.txt` để giảm rủi ro không tương thích khi deserialize model.
+> `scikit-learn` is **pinned** to version `1.6.1` in `requirements.txt` to reduce the risk of incompatibility when deserializing the model.
 
-### Hệ điều hành
+### Operating System
 
-| Hệ điều hành | Phù hợp cho |
+| OS | Suitable for |
 |---|---|
-| **Windows** | Huấn luyện, đánh giá, replay CSV và dashboard |
-| **Ubuntu/Linux** | Capture PCAP, NFStream, Suricata, systemd và ELK deployment |
+| **Windows** | Training, evaluation, CSV replay, and dashboard |
+| **Ubuntu/Linux** | PCAP capture, NFStream, Suricata, systemd, and ELK deployment |
 
 ---
 
-## Cài đặt nhanh
+## Quick Installation
 
 ### Windows PowerShell
 
@@ -193,7 +193,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Các tiện ích không thuộc đường chạy chính (ví dụ XGBoost comparison hoặc công cụ chỉnh DOCX) có thể cài thêm bằng:
+Utilities outside the main pipeline (e.g. XGBoost comparison or DOCX editing tools) can be installed additionally with:
 
 ```bash
 pip install -r requirements-optional.txt
@@ -201,35 +201,35 @@ pip install -r requirements-optional.txt
 
 ---
 
-## Kiểm tra repo sau khi cài đặt
+## Post-Installation Checks
 
-**1. Smoke test schema/extractor**
+**1. Schema/extractor smoke test**
 
 ```bash
 python smoke_test_schema.py
 ```
 
-Kết quả mong đợi:
+Expected output:
 
 ```text
 [+] Smoke test schema/extractor OK.
 ```
 
-**2. Kiểm tra tính toàn vẹn model**
+**2. Model integrity verification**
 
 ```bash
 python verify_model_artifacts_security.py
 ```
 
-Script kiểm tra model có nằm trong thư mục tin cậy và SHA-256 có khớp metadata trước khi sử dụng hay không.
+This script checks whether the model resides in a trusted directory and whether its SHA-256 hash matches the metadata before use.
 
-> ⚠️ **Không load** file `.pkl`/`.joblib` lấy từ nguồn không tin cậy. Pickle/joblib có thể thực thi mã trong quá trình deserialize.
+> ⚠️ **Do not load** `.pkl`/`.joblib` files from untrusted sources. Pickle/joblib can execute arbitrary code during deserialization.
 
 ---
 
-## Chạy AI inference bằng dữ liệu mẫu
+## Running AI Inference on Sample Data
 
-Repo có sẵn `sample_flows.csv` để kiểm tra nhanh:
+The repo ships with `sample_flows.csv` for a quick test:
 
 ```bash
 python nids_detector.py \
@@ -240,7 +240,7 @@ python nids_detector.py \
   --disable-telegram
 ```
 
-Trên PowerShell:
+On PowerShell:
 
 ```powershell
 python nids_detector.py `
@@ -251,7 +251,7 @@ python nids_detector.py `
   --disable-telegram
 ```
 
-Model chính thức mặc định sử dụng:
+The official model uses the following by default:
 
 - `models/nids_rf_pipeline.pkl`
 - `models/metadata.json`
@@ -259,15 +259,15 @@ Model chính thức mặc định sử dụng:
 
 ---
 
-## Chạy dashboard thời gian thực
+## Running the Real-Time Dashboard
 
-Trên Windows:
+On Windows:
 
 ```powershell
 .\run_realtime_dashboard.ps1
 ```
 
-Hoặc chạy trực tiếp:
+Or run directly:
 
 ```bash
 python realtime_dashboard.py \
@@ -276,15 +276,15 @@ python realtime_dashboard.py \
   --port 8050
 ```
 
-Sau đó mở: `http://127.0.0.1:8050`
+Then open: `http://127.0.0.1:8050`
 
-Dashboard có thể hiển thị số flow đã xử lý, số cảnh báo, alert rate, latency, throughput và các chỉ số live khi input có nhãn.
+The dashboard can display the number of flows processed, alert count, alert rate, latency, throughput, and additional live metrics when the input is labeled.
 
 ---
 
-## Dung hợp cảnh báo Suricata + AI
+## Suricata + AI Alert Fusion
 
-Repo có log mẫu để thử module fusion:
+The repo includes sample logs to test the fusion module:
 
 ```bash
 python hybrid_alert_fusion.py \
@@ -296,15 +296,15 @@ python hybrid_alert_fusion.py \
   --max-records 20
 ```
 
-> Nếu chưa tạo `logs/ai_alerts.jsonl`, hãy chạy bước AI inference trước.
+> If `logs/ai_alerts.jsonl` has not been created yet, run the AI inference step first.
 
-📖 Tài liệu chi tiết: [`docs/HYBRID_FUSION_GUIDE.md`](docs/HYBRID_FUSION_GUIDE.md)
+📖 Detailed documentation: [`docs/HYBRID_FUSION_GUIDE.md`](docs/HYBRID_FUSION_GUIDE.md)
 
 ---
 
-## Dataset và tái tạo kết quả
+## Dataset and Reproducing Results
 
-Các file UNSW-NB15 dung lượng lớn **không** được commit vào GitHub. Để tái tạo huấn luyện/đánh giá đầy đủ, cần chuẩn bị bộ dữ liệu cục bộ theo cấu trúc mà codebase yêu cầu, đặc biệt:
+The large UNSW-NB15 files are **not** committed to GitHub. To fully reproduce training/evaluation, prepare a local dataset following the structure required by the codebase, specifically:
 
 ```text
 UNSW_NB15_Splitted_CLEAN/
@@ -314,7 +314,7 @@ UNSW_NB15_Splitted_CLEAN/
 └── label_conflict_groups.csv
 ```
 
-Sau khi dữ liệu đã có đúng vị trí, có thể chạy:
+Once the data is in place, you can run:
 
 ```bash
 python check_leakage.py
@@ -324,32 +324,32 @@ python evaluate_artifacts.py
 python verify_official_artifacts.py
 ```
 
-> `verify_official_artifacts.py` là kiểm tra cho bộ hồ sơ thực nghiệm đầy đủ, nên sẽ báo thiếu file nếu bạn clone bản GitHub nhưng chưa đặt dataset lớn vào máy.
+> `verify_official_artifacts.py` checks the complete experimental artifact set, so it will report missing files if you clone the GitHub version without placing the large dataset on your machine.
 
-📖 Hướng dẫn tái tạo chi tiết: [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md)
+📖 Detailed reproduction guide: [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md)
 
 ---
 
-## PCAP / live traffic
+## PCAP / Live Traffic
 
-Nhánh PCAP/NFStream được dùng cho tích hợp và kiểm thử live. Codebase đồng thời lưu một nghiên cứu giảm schema trong `models/rf21_schema_gap/`.
+The PCAP/NFStream branch is used for integration and live testing. The codebase also stores a schema-reduction study in `models/rf21_schema_gap/`.
 
-Cần phân biệt rõ:
+The following distinctions must be observed:
 
-- Metrics chính thức trong `models/metrics.json` được đánh giá trên hold-out dataset theo schema 41 đặc trưng.
-- Kết quả trên traffic thực tế **không nhãn** chỉ là kiểm tra vận hành, **không được diễn giải** thành Accuracy/Precision/Recall/F1.
-- Khi schema extractor live chưa tương đương schema huấn luyện, **không được xem** kết quả PCAP là tương đương với kết quả hold-out.
+- Official metrics in `models/metrics.json` are evaluated on the hold-out dataset using the 41-feature schema.
+- Results on **unlabeled** real-world traffic are operational checks only and **must not be interpreted** as Accuracy/Precision/Recall/F1.
+- When the live schema extractor is not equivalent to the training schema, PCAP results **must not be treated** as equivalent to hold-out results.
 
-Xem thêm:
+See also:
 - [`docs/RF21_NFSTREAMER_RETRAIN_EVAL.md`](docs/RF21_NFSTREAMER_RETRAIN_EVAL.md)
 - [`docs/MINI_LIVE_TEST_RF21_GUIDE.md`](docs/MINI_LIVE_TEST_RF21_GUIDE.md)
 - [`models/schema_gap_report.md`](models/schema_gap_report.md)
 
 ---
 
-## Triển khai Ubuntu + ELK
+## Ubuntu + ELK Deployment
 
-Các file chính:
+Main files:
 
 ```text
 deployment/
@@ -363,60 +363,57 @@ deployment/
 └── tmpfiles/
 ```
 
-> ⚠️ **Không** chỉnh trực tiếp `hybrid-nids.env.example` để chứa secret thật. Hãy tạo bản cục bộ:
+> ⚠️ Do **not** edit `hybrid-nids.env.example` directly to hold real secrets. Instead, create a local copy:
 
 ```bash
 cp deployment/hybrid-nids.env.example deployment/hybrid-nids.env
 ```
 
-Sau đó điền mật khẩu/token trên máy triển khai. `deployment/hybrid-nids.env` đã được `.gitignore` loại khỏi Git.
+Then fill in passwords/tokens on the deployment machine. `deployment/hybrid-nids.env` is already excluded from Git via `.gitignore`.
 
-📖 Hướng dẫn: [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) và [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md)
+📖 Guides: [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) and [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md)
 
 ---
 
-## Bảo mật secret
+## Secrets Security
 
-**Không commit** các thông tin sau:
+**Never commit** the following:
 
 - Elasticsearch password
 - Kibana system password
 - Discord webhook
 - Telegram bot token/chat ID
 - Web panel password
-- PCAP hoặc log thu từ mạng thật có dữ liệu nhạy cảm
+- PCAP or logs collected from real networks containing sensitive data
 
-Repo chỉ giữ `deployment/hybrid-nids.env.example` với placeholder.
+The repo only retains `deployment/hybrid-nids.env.example` with placeholder values.
 
-> ⚠️ Nếu một secret thật từng được commit vào Git trước đây, chỉ thêm vào `.gitignore` là **chưa đủ**. Cần **thu hồi/rotate** secret đó và **xóa khỏi lịch sử Git** trước khi public repository.
+> ⚠️ If a real secret was ever committed to Git in the past, simply adding it to `.gitignore` is **not sufficient**. The secret must be **revoked/rotated** and **removed from Git history** before making the repository public.
 
 ---
 
-## Tài liệu quan trọng
+## Key Documentation
 
-| Tài liệu | Mục đích |
+| Document | Purpose |
 |---|---|
-| [`OFFICIAL_ARTIFACTS.md`](OFFICIAL_ARTIFACTS.md) | Danh sách artifact chính thức |
-| [`docs/CODEBASE_LOCK.md`](docs/CODEBASE_LOCK.md) | Khóa contract của codebase |
-| [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md) | Tái tạo thực nghiệm |
-| [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md) | Tổng hợp kết quả |
-| [`docs/HYBRID_FUSION_GUIDE.md`](docs/HYBRID_FUSION_GUIDE.md) | Dung hợp cảnh báo |
-| [`docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md`](docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md) | Đánh giá traffic cục bộ |
-| [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md) | Đồng bộ thời gian phục vụ correlation |
-| [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) | Triển khai Ubuntu |
+| [`OFFICIAL_ARTIFACTS.md`](OFFICIAL_ARTIFACTS.md) | List of official artifacts |
+| [`docs/CODEBASE_LOCK.md`](docs/CODEBASE_LOCK.md) | Codebase lock contract |
+| [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md) | Reproducing experiments |
+| [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md) | Results summary |
+| [`docs/HYBRID_FUSION_GUIDE.md`](docs/HYBRID_FUSION_GUIDE.md) | Alert fusion |
+| [`docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md`](docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md) | Local traffic evaluation |
+| [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md) | Time synchronization for correlation |
+| [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) | Ubuntu deployment |
 
 ---
 
-## Phạm vi sử dụng
+## Intended Use
 
-Codebase phục vụ **nghiên cứu, đào tạo và kiểm thử phòng lab**. Chỉ thực hiện capture, scanning hoặc mô phỏng tấn công trên hệ thống mà bạn **có quyền quản trị** hoặc **được phép kiểm thử**.
-
----
-
-## Ghi chú về license
-
-Bản repo này **chưa** tự động gán giấy phép nguồn mở. Trước khi công khai và cho phép bên thứ ba tái sử dụng mã nguồn, nên bổ sung một file `LICENSE` phù hợp với chính sách của tác giả/cơ sở đào tạo.
+This codebase is intended for **research, education, and lab testing purposes**. Only perform capturing, scanning, or attack simulation on systems you **own** or are **explicitly authorized** to test.
 
 ---
 
-<p align="center"><sub>Hybrid-NIDS — Đề án thạc sĩ về Hệ thống phát hiện xâm nhập mạng lai</sub></p>
+## License Note
+
+
+<p align="center"><sub>Hybrid-NIDS — Master's Thesis on a Hybrid Network Intrusion Detection System</sub></p>
