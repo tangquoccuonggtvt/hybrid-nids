@@ -1,0 +1,8 @@
+# Hybrid-NIDS local demo rules.
+# These rules are intentionally minimal. Replace HOME_NET/EXTERNAL_NET and add
+# organization-specific rules before production monitoring.
+
+alert icmp any any -> any any (msg:"HYBRID-NIDS ICMP traffic observed"; sid:1000001; rev:1;)
+alert tcp any any -> any 22 (msg:"HYBRID-NIDS SSH connection attempt"; flow:to_server; sid:1000002; rev:1;)
+alert tcp any any -> any 3389 (msg:"HYBRID-NIDS RDP connection attempt"; flow:to_server; sid:1000003; rev:1;)
+alert tcp any any -> any 445 (msg:"HYBRID-NIDS SMB connection attempt"; flow:to_server; sid:1000004; rev:1;)

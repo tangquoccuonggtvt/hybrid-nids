@@ -1,0 +1,15 @@
+[Unit]
+Description=Hybrid-NIDS PCAP capture rotation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hybrid-nids
+EnvironmentFile=/opt/hybrid-nids/deployment/hybrid-nids.env
+ExecStart=/usr/bin/bash /opt/hybrid-nids/scripts/capture_pcap_rotate.sh /opt/hybrid-nids/deployment/hybrid-nids.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

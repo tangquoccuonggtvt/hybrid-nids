@@ -1,0 +1,28 @@
+# ============================================================
+# Hybrid-NIDS HCMCT - Python dependencies
+# Recommended Python: 3.12 or 3.13
+# The official Random Forest artifact was created with
+# scikit-learn 1.6.1, therefore this version is pinned.
+# ============================================================
+
+# Core data processing
+numpy>=1.26,<3.0
+pandas>=2.0,<3.0
+scipy>=1.11,<2.0
+
+# Machine learning
+scikit-learn==1.6.1
+joblib>=1.3,<2.0
+
+# Network flow extraction
+nfstream>=6.5,<7.0
+
+# Evaluation and figures
+matplotlib>=3.8,<4.0
+
+# Baseline comparison / research experiments
+xgboost>=2.0,<4.0
+
+# Utilities used by tools/ for thesis/document generation
+python-docx>=1.1,<2.0
+Pillow>=10.0,<13.0
