@@ -72,9 +72,9 @@ At the collection layer, the same traffic source is observed via a SPAN/mirror p
 - **Group-aware Stratified 5-Fold Cross Validation** for classification threshold selection.
 - Leakage checks, inference benchmarking, feature importance analysis, and confusion matrix reporting.
 - Fusion of Suricata + AI alerts into `HYBRID_CORRELATED_ALERT`, `AI_ONLY_ALERT`, and `SURICATA_ONLY_ALERT`.
-- Real-time replay dashboard for demonstrations.
-- Ubuntu deployment scripts covering systemd, Logstash, ILM, logrotate, and time synchronization checks.
-- SHA-256 integrity verification before loading pickle/joblib models from a trusted artifact directory.
+- Real-time replay dashboard for demonstrations, plus a web control panel (`hybrid_nids_webpanel.py`) and multichannel alert forwarding.
+- Ubuntu deployment assets covering systemd services, Suricata rules, and an ELK Docker Compose stack.
+- A CI smoke test workflow (`.github/workflows/smoke-test.yml`) for basic pipeline validation on every push.
 
 ---
 
@@ -109,37 +109,95 @@ Leakage check results are stored in `models/leakage_check.json`: `duplicate_hash
 ## Repository Structure
 
 ```text
-HYBRID-NIDS/
-├── README.md
-├── requirements.txt
+hybrid-nids-hcmct/
+│
+├── README.md                          # REQUIRED
+├── .gitignore                         # REQUIRED
+├── requirements.txt                   # REQUIRED
 ├── requirements-optional.txt
-├── train_model.py                 # Official model training
-├── nids_detector.py               # AI inference on flow CSV / PCAP integration
-├── nids_features.py               # Flow feature extraction
-├── hybrid_alert_fusion.py         # Suricata + AI alert fusion
-├── realtime_dashboard.py          # Real-time replay dashboard
-├── hybrid_nids_webpanel.py        # Web control panel for the lab
-├── verify_official_artifacts.py   # Full artifact set verification
-├── verify_model_artifacts_security.py
+│
+├── nids_detector.py                   # ML detector
+├── nids_streaming_detector.py
+├── nids_features.py
+├── feature_schema.py
+├── hybrid_alert_fusion.py             # Suricata + ML fusion
+├── realtime_dashboard.py
+├── hybrid_nids_webpanel.py
+├── alert_multichannel_forwarder.py
+│
+├── train_model.py                     # Training
+├── clean_data.py
+├── check_leakage.py
+├── compare_baselines.py
 ├── benchmark_inference.py
-├── analyze_schema_gap.py
-├── analyze_feature_drift.py
-├── analyze_ttl_features.py
 ├── evaluate_artifacts.py
+├── evaluate_hybrid_labeled.py
 ├── evaluate_local_traffic.py
-├── sample_flows.csv               # Small sample for quick inference testing
-├── models/                        # Model + metrics + schema + figures
-├── data/                          # Small sample/metadata only
-├── logs/                          # Sample logs for fusion testing only
-├── docs/                          # Technical documentation and reproduction guides
-├── deployment/                    # systemd, ELK, logrotate, env.example
-├── scripts/                       # Lab/deployment scripts
-├── labeling/                      # Attack-window labeling samples
-├── evidence_screenshots/          # Testing/experiment evidence
-└── tools/                         # Documentation/thesis support utilities
+├── schema_check.py
+│
+├── sample_flows.csv                   # Small sample dataset
+│
+├── data/
+│   ├── README.md
+│   ├── NUSW-NB15_features.csv
+│   └── unsw_test_16467.csv            # Kept — only ~2.6 MB
+│
+├── models/
+│   ├── nids_rf_pipeline.pkl           # Official model
+│   ├── metrics.json
+│   ├── metadata.json
+│   ├── training_metadata.json
+│   ├── feature_schema_model.json
+│   ├── leakage_check.json
+│   ├── inference_benchmark.json
+│   ├── feature_importance.csv
+│   ├── feature_importance_top20.csv
+│   ├── confusion_matrix.png
+│   ├── feature_importance_top20.png
+│   ├── benchmark_latency.png
+│   └── benchmark_throughput.png
+│
+├── deployment/
+│   ├── hybrid-nids.env.example        # Template file ONLY
+│   │
+│   ├── suricata/
+│   │   └── local.rules
+│   │
+│   ├── elk/
+│   │   ├── docker-compose.yml
+│   │   └── BAO_MAT_ELK.md
+│   │
+│   └── systemd/
+│       ├── hybrid-nids-ai-detector.service
+│       ├── hybrid-nids-capture.service
+│       ├── hybrid-nids-fusion.service
+│       └── hybrid-nids-webpanel.service
+│
+├── scripts/
+│   ├── capture_pcap_rotate.sh
+│   ├── check_elk_pipeline.sh
+│   ├── generate_normal_traffic.sh
+│   ├── nids_demo_start.sh
+│   ├── nids_demo_stop.sh
+│   └── nids_demo_status.sh
+│
+├── docs/
+│   ├── RESULTS_SUMMARY.md
+│   ├── REPRODUCIBILITY_GUIDE.md
+│   ├── HYBRID_FUSION_GUIDE.md
+│   ├── UBUNTU_DEPLOYMENT_GUIDE.md
+│   ├── LOCAL_TRAFFIC_EVALUATION_GUIDE.md
+│   └── figures/
+│       └── ...
+│
+├── logs/
+│   ├── README.md
+│   └── sample_suricata_eve.jsonl      # SAMPLE log only
+│
+└── .github/
+    └── workflows/
+        └── smoke-test.yml
 ```
-
-The list of artifacts locked for the thesis is maintained in `OFFICIAL_ARTIFACTS.md` and `docs/CODEBASE_LOCK.md`.
 
 ---
 
@@ -172,8 +230,8 @@ The list of artifacts locked for the thesis is maintained in `OFFICIAL_ARTIFACTS
 ### Windows PowerShell
 
 ```powershell
-git clone https://github.com/<YOUR-USERNAME>/hybrid-nids.git
-cd hybrid-nids
+git clone https://github.com/<YOUR-USERNAME>/hybrid-nids-hcmct.git
+cd hybrid-nids-hcmct
 
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -184,8 +242,8 @@ pip install -r requirements.txt
 ### Ubuntu/Linux
 
 ```bash
-git clone https://github.com/<YOUR-USERNAME>/hybrid-nids.git
-cd hybrid-nids
+git clone https://github.com/<YOUR-USERNAME>/hybrid-nids-hcmct.git
+cd hybrid-nids-hcmct
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -203,25 +261,21 @@ pip install -r requirements-optional.txt
 
 ## Post-Installation Checks
 
-**1. Schema/extractor smoke test**
+**1. Feature schema check**
 
 ```bash
-python smoke_test_schema.py
+python schema_check.py
 ```
 
-Expected output:
+This verifies that the flow feature extractor output matches the schema the official model was trained on (`models/feature_schema_model.json`).
 
-```text
-[+] Smoke test schema/extractor OK.
-```
-
-**2. Model integrity verification**
+**2. Artifact evaluation**
 
 ```bash
-python verify_model_artifacts_security.py
+python evaluate_artifacts.py
 ```
 
-This script checks whether the model resides in a trusted directory and whether its SHA-256 hash matches the metadata before use.
+This script validates the official model artifacts in `models/` (pipeline, metadata, metrics) before they are used for inference.
 
 > ⚠️ **Do not load** `.pkl`/`.joblib` files from untrusted sources. Pickle/joblib can execute arbitrary code during deserialization.
 
@@ -261,20 +315,14 @@ The official model uses the following by default:
 
 ## Running the Real-Time Dashboard
 
-On Windows:
-
-```powershell
-.\run_realtime_dashboard.ps1
-```
-
-Or run directly:
-
 ```bash
 python realtime_dashboard.py \
   --input-csv sample_flows.csv \
   --host 127.0.0.1 \
   --port 8050
 ```
+
+On PowerShell, use the backtick line-continuation character instead of the backslash shown above.
 
 Then open: `http://127.0.0.1:8050`
 
@@ -317,14 +365,15 @@ UNSW_NB15_Splitted_CLEAN/
 Once the data is in place, you can run:
 
 ```bash
+python clean_data.py
 python check_leakage.py
 python train_model.py
+python compare_baselines.py
 python benchmark_inference.py
 python evaluate_artifacts.py
-python verify_official_artifacts.py
 ```
 
-> `verify_official_artifacts.py` checks the complete experimental artifact set, so it will report missing files if you clone the GitHub version without placing the large dataset on your machine.
+> Several of these scripts (`train_model.py`, `benchmark_inference.py`, `evaluate_artifacts.py`) expect the full local dataset and will report missing files if you clone the GitHub version without placing the large UNSW-NB15 dataset on your machine.
 
 📖 Detailed reproduction guide: [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md)
 
@@ -332,18 +381,15 @@ python verify_official_artifacts.py
 
 ## PCAP / Live Traffic
 
-The PCAP/NFStream branch is used for integration and live testing. The codebase also stores a schema-reduction study in `models/rf21_schema_gap/`.
+The `nids_streaming_detector.py` script and the `scripts/capture_pcap_rotate.sh` capture utility are used for integration and live testing against real traffic.
 
 The following distinctions must be observed:
 
 - Official metrics in `models/metrics.json` are evaluated on the hold-out dataset using the 41-feature schema.
-- Results on **unlabeled** real-world traffic are operational checks only and **must not be interpreted** as Accuracy/Precision/Recall/F1.
-- When the live schema extractor is not equivalent to the training schema, PCAP results **must not be treated** as equivalent to hold-out results.
+- Results on **unlabeled** real-world traffic (via `evaluate_local_traffic.py`) are operational checks only and **must not be interpreted** as Accuracy/Precision/Recall/F1.
+- When the live schema extractor is not equivalent to the training schema (verify with `schema_check.py`), PCAP results **must not be treated** as equivalent to hold-out results.
 
-See also:
-- [`docs/RF21_NFSTREAMER_RETRAIN_EVAL.md`](docs/RF21_NFSTREAMER_RETRAIN_EVAL.md)
-- [`docs/MINI_LIVE_TEST_RF21_GUIDE.md`](docs/MINI_LIVE_TEST_RF21_GUIDE.md)
-- [`models/schema_gap_report.md`](models/schema_gap_report.md)
+See also: [`docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md`](docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md)
 
 ---
 
@@ -353,14 +399,17 @@ Main files:
 
 ```text
 deployment/
-├── hybrid-nids.env.example
-├── systemd/
+├── hybrid-nids.env.example    # Template file ONLY
+├── suricata/
+│   └── local.rules
 ├── elk/
 │   ├── docker-compose.yml
-│   ├── ilm/
-│   └── logstash/pipeline/
-├── logrotate/
-└── tmpfiles/
+│   └── BAO_MAT_ELK.md         # ELK security notes
+└── systemd/
+    ├── hybrid-nids-ai-detector.service
+    ├── hybrid-nids-capture.service
+    ├── hybrid-nids-fusion.service
+    └── hybrid-nids-webpanel.service
 ```
 
 > ⚠️ Do **not** edit `hybrid-nids.env.example` directly to hold real secrets. Instead, create a local copy:
@@ -371,7 +420,9 @@ cp deployment/hybrid-nids.env.example deployment/hybrid-nids.env
 
 Then fill in passwords/tokens on the deployment machine. `deployment/hybrid-nids.env` is already excluded from Git via `.gitignore`.
 
-📖 Guides: [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) and [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md)
+The four `systemd/` unit files (`hybrid-nids-capture`, `hybrid-nids-ai-detector`, `hybrid-nids-fusion`, `hybrid-nids-webpanel`) run the capture, detection, fusion, and web panel components as independent services in production.
+
+📖 Guide: [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md)
 
 ---
 
@@ -396,14 +447,14 @@ The repo only retains `deployment/hybrid-nids.env.example` with placeholder valu
 
 | Document | Purpose |
 |---|---|
-| [`OFFICIAL_ARTIFACTS.md`](OFFICIAL_ARTIFACTS.md) | List of official artifacts |
-| [`docs/CODEBASE_LOCK.md`](docs/CODEBASE_LOCK.md) | Codebase lock contract |
 | [`docs/REPRODUCIBILITY_GUIDE.md`](docs/REPRODUCIBILITY_GUIDE.md) | Reproducing experiments |
 | [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md) | Results summary |
 | [`docs/HYBRID_FUSION_GUIDE.md`](docs/HYBRID_FUSION_GUIDE.md) | Alert fusion |
 | [`docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md`](docs/LOCAL_TRAFFIC_EVALUATION_GUIDE.md) | Local traffic evaluation |
-| [`docs/TIME_SYNC_GUIDE.md`](docs/TIME_SYNC_GUIDE.md) | Time synchronization for correlation |
 | [`docs/UBUNTU_DEPLOYMENT_GUIDE.md`](docs/UBUNTU_DEPLOYMENT_GUIDE.md) | Ubuntu deployment |
+| [`deployment/elk/BAO_MAT_ELK.md`](deployment/elk/BAO_MAT_ELK.md) | ELK Stack security notes |
+| [`data/README.md`](data/README.md) | Dataset sample notes |
+| [`logs/README.md`](logs/README.md) | Sample log notes |
 
 ---
 
@@ -415,5 +466,8 @@ This codebase is intended for **research, education, and lab testing purposes**.
 
 ## License Note
 
+This repository has **not** yet been assigned an open-source license. Before making it public and allowing third parties to reuse the source code, add a `LICENSE` file consistent with the author's or institution's policy.
+
+---
 
 <p align="center"><sub>Hybrid-NIDS — Master's Thesis on a Hybrid Network Intrusion Detection System</sub></p>
