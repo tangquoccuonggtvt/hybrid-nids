@@ -230,7 +230,7 @@ hybrid-nids-hcmct/
 ### Windows PowerShell
 
 ```powershell
-git clone https://github.com/<YOUR-USERNAME>/hybrid-nids-hcmct.git
+git clone https://github.com/tangquoccuonggtvt/hybrid-nids.git
 cd hybrid-nids-hcmct
 
 py -3.13 -m venv .venv
