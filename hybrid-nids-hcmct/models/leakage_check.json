@@ -1,0 +1,8 @@
+{
+  "development_rows": 2030129,
+  "test_rows": 508039,
+  "duplicate_hash_count": 0,
+  "duplicate_ratio_over_test": 0.0,
+  "is_pass": true,
+  "note": "PASS: Không phát hiện duplicate giữa Development và Test."
+}
