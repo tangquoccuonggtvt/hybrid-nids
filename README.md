@@ -460,13 +460,12 @@ The repo only retains `deployment/hybrid-nids.env.example` with placeholder valu
 
 ## Intended Use
 
-This codebase is intended for **research, education, and lab testing purposes**. Only perform capturing, scanning, or attack simulation on systems you **own** or are **explicitly authorized** to test.
-
+This codebase is intended for **research, education, and lab testing purposes**. 
 ---
 
 ## License Note
 
-This repository has **not** yet been assigned an open-source license. Before making it public and allowing third parties to reuse the source code, add a `LICENSE` file consistent with the author's or institution's policy.
+
 
 ---
 
